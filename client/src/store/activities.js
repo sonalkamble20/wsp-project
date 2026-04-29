@@ -1,66 +1,99 @@
+/**
+ * activities.js — Pinia store for workout activities.
+ *
+ * All data comes from the server via the centralized api.js module.
+ * Ownership is enforced on the server using the JWT; the client
+ * never sets the owner field itself.
+ */
+
 import { defineStore } from 'pinia';
+import api from '../services/api';
 
 export const useActivitiesStore = defineStore('activities', {
     state: () => ({
-        activities: [
-            { id: 1, userId: 2, type: 'Running', distance: 5, duration: 30, date: '2026-03-01', note: 'Morning run' },
-            { id: 2, userId: 2, type: 'Cycling', distance: 15, duration: 45, date: '2026-03-03', note: 'To work' },
-            { id: 3, userId: 3, type: 'Swimming', distance: 1, duration: 40, date: '2026-03-05', note: 'Pool' },
-            { id: 4, userId: 4, type: 'Walking', distance: 3, duration: 45, date: '2026-03-07', note: 'Evening walk' },
-            { id: 5, userId: 2, type: 'Weightlifting', distance: 0, duration: 60, date: '2026-03-08', note: 'Leg day' }
-        ],
-        nextId: 6
+        activities: [],
+        stats: null,
+        friendsFeed: [],
+        loading: false,
+        error: null,
     }),
+
     actions: {
-        addActivity(activity) {
-            this.activities.push({
-                ...activity,
-                id: this.nextId++
-            });
-        },
-        updateActivity(id, data) {
-            const index = this.activities.findIndex(a => a.id === id);
-            if (index !== -1) {
-                this.activities[index] = { ...this.activities[index], ...data };
+        /** GET /api/activities — fetch own activities from server */
+        async fetchActivities() {
+            this.loading = true;
+            this.error = null;
+            try {
+                this.activities = await api.get('/activities');
+            } catch (err) {
+                this.error = err.message;
+            } finally {
+                this.loading = false;
             }
         },
-        deleteActivity(id) {
-            this.activities = this.activities.filter(a => a.id !== id);
-        }
+
+        /** GET /api/activities/stats — fetch aggregated stats */
+        async fetchStats() {
+            try {
+                this.stats = await api.get('/activities/stats');
+            } catch (err) {
+                this.error = err.message;
+            }
+        },
+
+        /** GET /api/activities/feed — fetch friends' activities */
+        async fetchFriendsFeed() {
+            this.loading = true;
+            this.error = null;
+            try {
+                this.friendsFeed = await api.get('/activities/feed');
+            } catch (err) {
+                this.error = err.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        /** POST /api/activities — log a new activity */
+        async addActivity(activityData) {
+            this.error = null;
+            try {
+                const created = await api.post('/activities', activityData);
+                this.activities.unshift(created);
+                // Refresh stats after adding
+                await this.fetchStats();
+                return created;
+            } catch (err) {
+                this.error = err.message;
+                return null;
+            }
+        },
+
+        /** PUT /api/activities/:id — update an activity */
+        async updateActivity(id, data) {
+            this.error = null;
+            try {
+                const updated = await api.put(`/activities/${id}`, data);
+                const index = this.activities.findIndex((a) => a._id === id);
+                if (index !== -1) this.activities[index] = updated;
+                await this.fetchStats();
+                return updated;
+            } catch (err) {
+                this.error = err.message;
+                return null;
+            }
+        },
+
+        /** DELETE /api/activities/:id — delete an activity */
+        async deleteActivity(id) {
+            this.error = null;
+            try {
+                await api.delete(`/activities/${id}`);
+                this.activities = this.activities.filter((a) => a._id !== id);
+                await this.fetchStats();
+            } catch (err) {
+                this.error = err.message;
+            }
+        },
     },
-    getters: {
-        getUserActivities: (state) => (userId) => {
-            return state.activities.filter(a => a.userId === userId).sort((a, b) => new Date(b.date) - new Date(a.date));
-        },
-        getFriendsActivities: (state) => (friendIds) => {
-            return state.activities.filter(a => friendIds.includes(a.userId)).sort((a, b) => new Date(b.date) - new Date(a.date));
-        },
-        getUserStats: (state) => (userId) => {
-            const userActs = state.activities.filter(a => a.userId === userId);
-            const totalWorkouts = userActs.length;
-            const totalDuration = userActs.reduce((acc, a) => acc + (Number(a.duration) || 0), 0);
-            const totalDistance = userActs.reduce((acc, a) => acc + (Number(a.distance) || 0), 0);
-
-            const typeCounts = userActs.reduce((acc, a) => {
-                acc[a.type] = (acc[a.type] || 0) + 1;
-                return acc;
-            }, {});
-
-            let favoriteType = 'None';
-            let maxCount = 0;
-            for (const [type, count] of Object.entries(typeCounts)) {
-                if (count > maxCount) {
-                    maxCount = count;
-                    favoriteType = type;
-                }
-            }
-
-            return {
-                totalWorkouts,
-                totalDuration,
-                totalDistance,
-                favoriteType
-            };
-        }
-    }
 });

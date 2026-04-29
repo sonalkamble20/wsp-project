@@ -1,13 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue';
-import { useAuthStore } from '../store/auth';
+import { ref, onMounted } from 'vue';
 import { useActivitiesStore } from '../store/activities';
 import { Plus, Edit2, Trash2, X } from 'lucide-vue-next';
 
-const authStore = useAuthStore();
 const activitiesStore = useActivitiesStore();
-
-const activities = computed(() => activitiesStore.getUserActivities(authStore.currentUser.id));
 
 const showModal = ref(false);
 const editingId = ref(null);
@@ -21,6 +17,10 @@ const form = ref({
 });
 
 const activityTypes = ['Running', 'Cycling', 'Swimming', 'Walking', 'Weightlifting', 'Yoga', 'Other'];
+
+onMounted(() => {
+  activitiesStore.fetchActivities();
+});
 
 function resetForm() {
   form.value = {
@@ -40,26 +40,38 @@ function openAdd() {
 }
 
 function openEdit(act) {
-  form.value = { ...act };
-  editingId.value = act.id;
+  form.value = {
+    type: act.type,
+    distance: act.distance,
+    duration: act.duration,
+    date: act.date,
+    note: act.note || ''
+  };
+  editingId.value = act._id;
   showModal.value = true;
 }
 
-function saveActivity() {
+async function saveActivity() {
+  const payload = {
+    type: form.value.type,
+    date: form.value.date,
+    duration: Number(form.value.duration),
+    distance: Number(form.value.distance) || 0,
+    note: form.value.note || ''
+  };
+
   if (editingId.value) {
-    activitiesStore.updateActivity(editingId.value, { ...form.value });
+    await activitiesStore.updateActivity(editingId.value, payload);
   } else {
-    activitiesStore.addActivity({
-      ...form.value,
-      userId: authStore.currentUser.id
-    });
+    await activitiesStore.addActivity(payload);
   }
-  resetForm();
+
+  if (!activitiesStore.error) resetForm();
 }
 
-function deleteActivity(id) {
-  if (confirm("Are you sure you want to delete this activity?")) {
-    activitiesStore.deleteActivity(id);
+async function deleteActivity(id) {
+  if (confirm('Are you sure you want to delete this activity?')) {
+    await activitiesStore.deleteActivity(id);
   }
 }
 </script>
@@ -77,7 +89,12 @@ function deleteActivity(id) {
       </button>
     </div>
 
-    <!-- Activities List -->
+    <!-- Error banner -->
+    <div v-if="activitiesStore.error" class="error-banner mb-4">
+      {{ activitiesStore.error }}
+    </div>
+
+    <!-- Activities Table -->
     <div class="card table-wrapper">
       <table class="table">
         <thead>
@@ -91,7 +108,11 @@ function deleteActivity(id) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="act in activities" :key="act.id">
+          <tr v-if="activitiesStore.loading">
+            <td colspan="6" class="p-8 text-center text-secondary">Loading…</td>
+          </tr>
+
+          <tr v-for="act in activitiesStore.activities" :key="act._id">
             <td class="font-medium">{{ act.date }}</td>
             <td>
               <span class="badge badge-primary">{{ act.type }}</span>
@@ -103,12 +124,13 @@ function deleteActivity(id) {
               <button @click="openEdit(act)" class="btn-icon mr-2" title="Edit">
                 <Edit2 style="width: 16px; height: 16px" />
               </button>
-              <button @click="deleteActivity(act.id)" class="btn-icon text-danger" title="Delete">
+              <button @click="deleteActivity(act._id)" class="btn-icon text-danger" title="Delete">
                 <Trash2 style="width: 16px; height: 16px" />
               </button>
             </td>
           </tr>
-          <tr v-if="activities.length === 0">
+
+          <tr v-if="!activitiesStore.loading && activitiesStore.activities.length === 0">
             <td colspan="6" class="p-8 text-center text-secondary">
               No activities found. Log your first workout!
             </td>
@@ -126,7 +148,7 @@ function deleteActivity(id) {
             <X style="width: 20px; height: 20px" />
           </button>
         </div>
-        
+
         <div class="card-body">
           <form @submit.prevent="saveActivity">
             <div class="grid grid-cols-2 gap-4">
@@ -158,6 +180,11 @@ function deleteActivity(id) {
               </div>
             </div>
 
+            <!-- API error inside modal -->
+            <div v-if="activitiesStore.error" class="error-banner mt-2">
+              {{ activitiesStore.error }}
+            </div>
+
             <div class="mt-6 flex justify-end gap-2">
               <button type="button" @click="resetForm" class="btn btn-secondary">Cancel</button>
               <button type="submit" class="btn btn-primary">Save Activity</button>
@@ -168,3 +195,14 @@ function deleteActivity(id) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.error-banner {
+  background-color: rgba(229, 56, 59, 0.1);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+}
+</style>
