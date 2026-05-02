@@ -8,6 +8,7 @@
     "start": "node server/seed.js && node index.js",
     "dev": "concurrently \"nodemon index.js\" \"npm run dev --prefix client\"",
     "build": "npm install --prefix client && npm run build --prefix client",
+    "postinstall": "npm run build",
     "seed": "node server/seed.js"
   },
   "dependencies": {
