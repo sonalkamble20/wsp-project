@@ -34,16 +34,14 @@ app.use('/api/users', userRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/exercise-types', exerciseTypeRoutes);
 
-/* ── Serve the Vue production build in production ── */
-if (process.env.NODE_ENV === 'production') {
-    const clientDist = path.join(__dirname, 'client', 'dist');
-    app.use(express.static(clientDist));
+/* ── Serve the Vue production build ── */
+const clientDist = path.join(__dirname, 'client', 'dist');
+app.use(express.static(clientDist));
 
-    // SPA fallback — any non-API route returns index.html
-    app.get(/^(?!\/api).*/, (_req, res) => {
-        res.sendFile(path.join(clientDist, 'index.html'));
-    });
-}
+// SPA fallback — any non-API route returns index.html
+app.get(/^(?!\/api).*/, (_req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+});
 
 /* ── Start ── */
 connectDB()
