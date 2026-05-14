@@ -1,5 +1,5 @@
-<script setup>
-import { onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
+import { useInfiniteScroll } from '@vueuse/core';
 import { useAuthStore } from '../store/auth';
 import { useUsersStore } from '../store/users';
 import { useActivitiesStore } from '../store/activities';
@@ -8,11 +8,25 @@ const authStore = useAuthStore();
 const usersStore = useUsersStore();
 const activitiesStore = useActivitiesStore();
 
+const el = ref(null);
+
+// Triggered when user scrolls near bottom
+useInfiniteScroll(
+  el,
+  async () => {
+    if (activitiesStore.feedHasMore && !activitiesStore.loading) {
+      await activitiesStore.fetchFriendsFeedPaginated();
+    }
+  },
+  { distance: 50 }
+);
+
 onMounted(async () => {
+  activitiesStore.resetFeed();
   await Promise.all([
     usersStore.fetchAllUsers(),
     usersStore.fetchFriends(),
-    activitiesStore.fetchFriendsFeed(),
+    activitiesStore.fetchFriendsFeedPaginated(),
   ]);
 });
 
@@ -24,7 +38,8 @@ function otherUsers() {
 async function toggleFriend(userId) {
   await usersStore.toggleFriend(userId);
   // Refresh feed after friend change
-  await activitiesStore.fetchFriendsFeed();
+  activitiesStore.resetFeed();
+  await activitiesStore.fetchFriendsFeedPaginated();
 }
 </script>
 
@@ -68,13 +83,17 @@ async function toggleFriend(userId) {
       </div>
 
       <!-- Friends Feed -->
-      <div>
-        <h2 class="text-2xl font-bold mb-4">Feed</h2>
-
-        <div v-if="activitiesStore.loading" class="text-secondary text-sm">Loading feed…</div>
+      <div ref="el" class="feed-container">
+        <div class="flex justify-between items-end mb-4">
+          <h2 class="text-2xl font-bold">Feed</h2>
+          <p v-if="activitiesStore.feedTotal > 0" class="text-sm text-secondary mb-1">
+            Showing {{ activitiesStore.feedItems.length }} of {{ activitiesStore.feedTotal }} activities
+          </p>
+        </div>
 
         <div class="feed-list grid grid-cols-1 gap-4">
-          <div v-for="act in activitiesStore.friendsFeed" :key="act._id" class="card p-4">
+          <!-- Feed Items -->
+          <div v-for="act in activitiesStore.feedItems" :key="act._id" class="card p-4">
             <div class="flex items-start justify-between">
               <div>
                 <p class="font-bold text-lg text-primary mb-1">
@@ -93,11 +112,24 @@ async function toggleFriend(userId) {
             </div>
           </div>
 
+          <!-- Loading Skeletons -->
+          <div v-if="activitiesStore.loading" class="skeleton-container grid grid-cols-1 gap-4">
+            <div v-for="n in 2" :key="n" class="card p-4 skeleton-card">
+              <div class="skeleton-line w-1/3 h-6 mb-2"></div>
+              <div class="skeleton-line w-1/4 h-4 mb-4"></div>
+              <div class="skeleton-line w-full h-12"></div>
+            </div>
+          </div>
+
           <div
-            v-if="!activitiesStore.loading && activitiesStore.friendsFeed.length === 0"
+            v-if="!activitiesStore.loading && activitiesStore.feedItems.length === 0"
             class="card p-8 text-center bg-surface text-secondary"
           >
             <p>Your friends haven't logged any activities yet, or you haven't added any friends.</p>
+          </div>
+
+          <div v-if="!activitiesStore.feedHasMore && activitiesStore.feedItems.length > 0" class="text-center py-4 text-secondary text-sm">
+            You've reached the end of the feed!
           </div>
         </div>
       </div>
@@ -114,5 +146,28 @@ async function toggleFriend(userId) {
   border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
+}
+
+.feed-container {
+  max-height: 80vh;
+  overflow-y: auto;
+  padding-right: 1rem;
+}
+
+/* Skeleton Styles */
+.skeleton-card {
+  pointer-events: none;
+}
+
+.skeleton-line {
+  background: linear-gradient(90deg, var(--border) 25%, var(--surface-hover) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 </style>

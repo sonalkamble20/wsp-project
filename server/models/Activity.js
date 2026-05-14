@@ -86,11 +86,18 @@ activitySchema.statics.getStatsForOwner = async function (ownerId) {
     return { totalWorkouts, totalDuration, totalDistance, favoriteType };
 };
 
-/* ─── Static: activities for a list of user ids (friends' feed) ─── */
-activitySchema.statics.getFriendsFeed = function (ownerIds) {
+/* ─── Static: activities for a list of user ids (friends' feed) with pagination ─── */
+activitySchema.statics.getFriendsFeed = function (ownerIds, skip = 0, limit = 10) {
     return this.find({ owner: { $in: ownerIds } })
         .sort({ date: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
         .populate('owner', 'name email');
+};
+
+/* ─── Static: count total activities in the friends' feed ─── */
+activitySchema.statics.countFriendsFeed = function (ownerIds) {
+    return this.countDocuments({ owner: { $in: ownerIds } });
 };
 
 const Activity = mongoose.model('Activity', activitySchema);

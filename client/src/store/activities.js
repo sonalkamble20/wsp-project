@@ -14,6 +14,12 @@ export const useActivitiesStore = defineStore('activities', {
         activities: [],
         stats: null,
         friendsFeed: [],
+        // Paginated feed state
+        feedItems: [],
+        feedTotal: 0,
+        feedPage: 1,
+        feedLimit: 10,
+        feedHasMore: true,
         loading: false,
         error: null,
     }),
@@ -41,12 +47,42 @@ export const useActivitiesStore = defineStore('activities', {
             }
         },
 
-        /** GET /api/activities/feed — fetch friends' activities */
+        /** GET /api/activities/feed — fetch friends' activities (paginated) */
+        async fetchFriendsFeedPaginated() {
+            if (this.loading || !this.feedHasMore) return;
+
+            this.loading = true;
+            this.error = null;
+            try {
+                const response = await api.get(`/activities/feed?page=${this.feedPage}&limit=${this.feedLimit}`);
+                
+                // Append new data to existing feed
+                this.feedItems.push(...response.items);
+                this.feedTotal = response.total;
+                this.feedHasMore = response.hasMore;
+                this.feedPage++;
+            } catch (err) {
+                this.error = err.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        /** Reset paginated feed state */
+        resetFeed() {
+            this.feedItems = [];
+            this.feedTotal = 0;
+            this.feedPage = 1;
+            this.feedHasMore = true;
+        },
+
+        /** GET /api/activities/feed — fetch friends' activities (DEPRECATED - use paginated instead) */
         async fetchFriendsFeed() {
             this.loading = true;
             this.error = null;
             try {
-                this.friendsFeed = await api.get('/activities/feed');
+                const response = await api.get('/activities/feed');
+                this.friendsFeed = response.items || response;
             } catch (err) {
                 this.error = err.message;
             } finally {

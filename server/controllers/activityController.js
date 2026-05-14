@@ -102,15 +102,30 @@ export async function getMyStats(req, res) {
     }
 }
 
-/* ─── GET /activities/feed ─── latest activities from friends */
+/* ─── GET /activities/feed ─── paginated activities from friends */
 export async function getFriendsFeed(req, res) {
     try {
-        // Retrieve friends list for the current user from the JWT-verified id
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        // Retrieve friends list for the current user
         const userWithFriends = await User.getFriends(req.user.id);
         const friendIds = (userWithFriends?.friends ?? []).map((f) => f._id);
 
-        const feed = await Activity.getFriendsFeed(friendIds);
-        res.json(feed);
+        // Fetch feed data and total count in parallel
+        const [items, total] = await Promise.all([
+            Activity.getFriendsFeed(friendIds, skip, limit),
+            Activity.countFriendsFeed(friendIds),
+        ]);
+
+        res.json({
+            items,
+            total,
+            page,
+            limit,
+            hasMore: skip + items.length < total,
+        });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
