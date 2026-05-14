@@ -1,3 +1,4 @@
+<script setup>
 import { ref, onMounted } from 'vue';
 import { useInfiniteScroll } from '@vueuse/core';
 import { useAuthStore } from '../store/auth';
