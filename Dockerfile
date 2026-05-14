@@ -9,7 +9,7 @@ COPY package*.json ./
 COPY client/package*.json ./client/
 
 # Install dependencies
-RUN npm install
+RUN npm install --ignore-scripts
 RUN npm install --prefix client
 
 # Copy the rest of the code
