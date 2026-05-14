@@ -1,35 +1,35 @@
-name: Build and Deploy to Cloud Run
+name: Build and Validate
 
 on:
   push:
     branches: [ "main" ]
-
-env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  SERVICE_NAME: fittrak
-  REGION: us-central1
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
-  build-and-deploy:
+  build:
+    name: Build and Test
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Set up Node.js
-      uses: actions/checkout@v4
+      uses: actions/setup-node@v4
       with:
         node-version: '20'
+        cache: 'npm'
 
-    - name: Install dependencies and Build
-      run: |
-        npm install
-        npm run build
+    - name: Install Root Dependencies
+      run: npm install
 
-    # Note: To actually deploy to GCP via this action, you would need to 
-    # add GCP_SA_KEY and GCP_PROJECT_ID to your GitHub repository secrets.
-    # For now, this action will successfully validate your build on every push.
-    
-    - name: Build Docker Image (Proof of Concept)
-      run: |
-        docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+    - name: Install Client Dependencies
+      run: npm install --prefix client
+
+    - name: Build Frontend
+      run: npm run build
+      env:
+        NODE_ENV: production
+
+    - name: Validate Dockerfile
+      run: docker build -t fittrak-local .
